@@ -1,0 +1,65 @@
+version: '3.8' # Specify a recent version
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest # Using Confluent's reliable images
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181" # Expose Zookeeper port to host if needed for tools
+    networks:
+      - app-network
+
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    ports:
+      # Port for access from within the Docker network (e.g., other containers)
+      - "9092:9092"
+      # Port for access from your host machine (e.g., your Spring Boot app)
+      - "29092:29092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181' # Connects to zookeeper service by name
+      # Listeners configuration is crucial:
+      # - PLAINTEXT://kafka:9092 is for internal communication within the Docker network
+      # - PLAINTEXT_HOST://localhost:29092 is for external communication from your host machine
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1 # Suitable for single-node dev setup
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0 # Speeds up consumer joining in dev
+      # Optional: Auto-create a topic (replace 'my-test-topic' with your desired topic)
+      # KAFKA_CREATE_TOPICS: "my-test-topic:1:1"
+    networks:
+      - app-network
+
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:latest # Use specific version like 2019-latest for stability
+    container_name: sqlserver
+    environment:
+      ACCEPT_EULA: "Y" # Required by Microsoft EULA
+      # IMPORTANT: Change this default password!
+      SA_PASSWORD: "YourStrong@Password123"
+      MSSQL_PID: "Developer" # Use Developer edition for testing (check licensing for other uses)
+    ports:
+      - "1433:1433" # Expose standard SQL Server port to the host
+    volumes:
+      # Persist database data outside the container
+      - sqlserver_data:/var/opt/mssql
+    networks:
+      - app-network
+
+# Define the network that all services will share
+networks:
+  app-network:
+    driver: bridge
+
+# Define a named volume for SQL Server data persistence
+volumes:
+  sqlserver_data:
+    driver: local
